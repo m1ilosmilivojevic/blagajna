@@ -15,6 +15,9 @@ class EntryCreate(BaseModel):
 
     @model_validator(mode="after")
     def _validate_racun_prefix(self):
+        if self.ulaz > 0 and self.izlaz > 0:
+            raise ValueError("Stavka ne može imati i ulaz i izlaz")
+
         # Uplata pazara koristi datum kao racun_broj — preskoci prefiks
         if self.opis.strip().lower() == "uplata pazara":
             return self

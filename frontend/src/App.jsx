@@ -38,6 +38,10 @@ function prevDayDate(iso) {
   return d.toISOString().slice(0, 10)
 }
 
+function hasBothAmounts(ulaz, izlaz) {
+  return Number(ulaz || 0) > 0 && Number(izlaz || 0) > 0
+}
+
 export default function App() {
   const [kasa, setKasa] = useState('AVANS')
   const [datum, setDatum] = useState(todayISO())
@@ -55,6 +59,13 @@ export default function App() {
   const [rangeOpen, setRangeOpen] = useState(false)
   const [rangeFrom, setRangeFrom] = useState(todayISO())
   const [rangeTo, setRangeTo] = useState(todayISO())
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchKasa, setSearchKasa] = useState('')
+  const [searchFrom, setSearchFrom] = useState('')
+  const [searchTo, setSearchTo] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [searchDone, setSearchDone] = useState(false)
 
   async function loadJournal() {
     setError('')
@@ -96,6 +107,10 @@ export default function App() {
   async function addEntry(e) {
     e.preventDefault()
     setError('')
+    if (hasBothAmounts(ulaz, 0)) {
+      setError('Stavka ne može imati i ulaz i izlaz')
+      return
+    }
     const r = await fetch(`${API}/entries`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -130,6 +145,10 @@ export default function App() {
 
   async function saveEdit(e) {
     setError('')
+    if (hasBothAmounts(edit.ulaz, edit.izlaz)) {
+      setError('Stavka ne može imati i ulaz i izlaz')
+      return
+    }
     const r = await fetch(`${API}/entries/${e.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -180,6 +199,35 @@ export default function App() {
     loadJournal()
   }
 
+  async function searchEntries(e) {
+    e.preventDefault()
+    setError('')
+    if (searchFrom && searchTo && searchTo < searchFrom) {
+      setError("Datum 'do' mora biti posle datuma 'od'")
+      return
+    }
+
+    const params = new URLSearchParams()
+    if (searchQuery.trim()) params.set('q', searchQuery.trim())
+    if (searchKasa) params.set('kasa', searchKasa)
+    if (searchFrom) params.set('start', searchFrom)
+    if (searchTo) params.set('end', searchTo)
+
+    const r = await fetch(`${API}/entries/search?${params}`)
+    if (!r.ok) {
+      setError(parseError(await r.json()))
+      return
+    }
+    setSearchResults(await r.json())
+    setSearchDone(true)
+  }
+
+  function openSearchResult(entry) {
+    setKasa(entry.kasa)
+    setDatum(entry.datum)
+    setSearchOpen(false)
+  }
+
   const firma =
     kasa === 'AVANS' ? 'AVANSI Joviste, Subotica' : 'Joviste PAZAR, Subotica'
 
@@ -221,6 +269,8 @@ export default function App() {
                     className="print-menu-item"
                     onClick={() => {
                       setPrintMenuOpen(false)
+                      setRangeFrom(datum)
+                      setRangeTo(datum)
                       setRangeOpen(true)
                     }}
                   >
@@ -268,6 +318,13 @@ export default function App() {
             >
               + Uplata pazara
             </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setSearchOpen((v) => !v)}
+            >
+              Pretraga
+            </button>
           </div>
 
           <form className="form-row" onSubmit={addEntry}>
@@ -308,6 +365,110 @@ export default function App() {
 
           {error && <div className="error">{error}</div>}
         </div>
+
+        {searchOpen && (
+          <div className="card no-print search-card">
+            <form className="search-form" onSubmit={searchEntries}>
+              <input
+                className="input"
+                placeholder="Račun broj ili ime"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <select
+                className="input"
+                value={searchKasa}
+                onChange={(e) => setSearchKasa(e.target.value)}
+              >
+                <option value="">Sve kase</option>
+                {KASE.map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="date-input"
+                type="date"
+                value={searchFrom}
+                onChange={(e) => setSearchFrom(e.target.value)}
+              />
+              <input
+                className="date-input"
+                type="date"
+                value={searchTo}
+                onChange={(e) => setSearchTo(e.target.value)}
+              />
+              <button type="submit" className="btn btn-primary">
+                Nađi
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setSearchQuery('')
+                  setSearchKasa('')
+                  setSearchFrom('')
+                  setSearchTo('')
+                  setSearchResults([])
+                  setSearchDone(false)
+                }}
+              >
+                Očisti
+              </button>
+            </form>
+
+            {searchDone && (
+              <div className="table-wrap">
+                <table className="table compact-table">
+                  <thead>
+                    <tr>
+                      <th>Datum</th>
+                      <th>Kasa</th>
+                      <th>Opis</th>
+                      <th className="num">Ulaz</th>
+                      <th className="num">Izlaz</th>
+                      <th>Račun broj</th>
+                      <th style={{ width: 90 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {searchResults.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="empty">
+                          Nema rezultata
+                        </td>
+                      </tr>
+                    )}
+                    {searchResults.map((entry) => (
+                      <tr key={entry.id}>
+                        <td>{fmtDate(entry.datum)}</td>
+                        <td>{entry.kasa}</td>
+                        <td>{entry.opis}</td>
+                        <td className="num">
+                          {Number(entry.ulaz) ? fmt(entry.ulaz) : ''}
+                        </td>
+                        <td className="num">
+                          {Number(entry.izlaz) ? fmt(entry.izlaz) : ''}
+                        </td>
+                        <td className="muted">{entry.racun_broj}</td>
+                        <td className="row-actions">
+                          <button
+                            type="button"
+                            className="btn btn-icon btn-ghost"
+                            onClick={() => openSearchResult(entry)}
+                          >
+                            Otvori
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="card" style={{ marginTop: 16 }}>
           <div className="table-wrap">
@@ -480,7 +641,7 @@ export default function App() {
                 setError("Datum 'do' mora biti posle datuma 'od'")
                 return
               }
-              const url = `${API}/journal/${kasa}/range/pdf?start=${rangeFrom}&end=${rangeTo}`
+              const url = `${API}/journal/${kasa}/range/pdf?start=${rangeFrom}&end=${rangeTo}&skip_empty=false`
               window.open(url, '_blank')
               setRangeOpen(false)
             }}

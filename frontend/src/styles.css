@@ -205,8 +205,30 @@ body {
   padding: 12px 16px;
 }
 
+.search-card {
+  margin-top: 16px;
+  overflow: hidden;
+}
+
+.search-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 140px 150px 150px auto auto;
+  gap: 8px;
+  padding: 12px 16px;
+  align-items: center;
+}
+
+.compact-table th,
+.compact-table td {
+  padding: 9px 12px;
+}
+
 @media (max-width: 720px) {
   .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .search-form {
     grid-template-columns: 1fr;
   }
 }

@@ -1,13 +1,13 @@
 from datetime import date
 from decimal import Decimal
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .db import Base, engine, get_db
 from .models import Entry, Kasa
-from .pdf import render_journal_pdf, render_journals_pdf
+from .pdf import render_journal_pdf, render_journal_range_pdf
 from .schemas import DayJournal, EntryCreate, EntryOut
 
 Base.metadata.create_all(bind=engine)
@@ -29,6 +29,20 @@ def saldo_before(db: Session, kasa: Kasa, datum: date) -> Decimal:
     return Decimal(db.execute(stmt).scalar_one())
 
 
+def ensure_unique_racun(
+    db: Session, kasa: Kasa, racun_broj: str, entry_id: int | None = None
+) -> None:
+    normalized = racun_broj.strip().lower()
+    stmt = select(Entry.id).where(
+        Entry.kasa == kasa,
+        func.lower(func.trim(Entry.racun_broj)) == normalized,
+    )
+    if entry_id is not None:
+        stmt = stmt.where(Entry.id != entry_id)
+    if db.execute(stmt).first():
+        raise HTTPException(400, "Račun broj već postoji za ovu kasu")
+
+
 @app.get("/")
 def root():
     return {"status": "ok"}
@@ -38,6 +52,7 @@ def root():
 def create_entry(payload: EntryCreate, db: Session = Depends(get_db)):
     if payload.ulaz < 0 or payload.izlaz < 0:
         raise HTTPException(400, "Iznosi ne smeju biti negativni")
+    ensure_unique_racun(db, payload.kasa, payload.racun_broj)
     entry = Entry(
         kasa=payload.kasa,
         datum=payload.datum or date.today(),
@@ -77,6 +92,41 @@ def get_journal(kasa: Kasa, datum: date, db: Session = Depends(get_db)):
     )
 
 
+@app.get("/entries/search", response_model=list[EntryOut])
+def search_entries(
+    q: str = "",
+    kasa: Kasa | None = None,
+    start: date | None = None,
+    end: date | None = None,
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    if start and end and end < start:
+        raise HTTPException(400, "Datum 'do' mora biti posle datuma 'od'")
+
+    stmt = select(Entry)
+    term = q.strip().lower()
+    if term:
+        pattern = f"%{term}%"
+        stmt = stmt.where(
+            func.lower(Entry.opis).like(pattern)
+            | func.lower(Entry.racun_broj).like(pattern)
+        )
+    if kasa:
+        stmt = stmt.where(Entry.kasa == kasa)
+    if start:
+        stmt = stmt.where(Entry.datum >= start)
+    if end:
+        stmt = stmt.where(Entry.datum <= end)
+
+    rows = (
+        db.execute(stmt.order_by(Entry.datum.desc(), Entry.id.desc()).limit(limit))
+        .scalars()
+        .all()
+    )
+    return [EntryOut.model_validate(e) for e in rows]
+
+
 class UplataPazara(EntryCreate):
     pass
 
@@ -90,6 +140,7 @@ def create_uplata_pazara(
     datum = payload.datum or date.today()
     racun = payload.racun_broj or datum.strftime("%d.%m.%Y")
     for kasa in (Kasa.AVANS, Kasa.PAZAR):
+        ensure_unique_racun(db, kasa, racun)
         db.add(Entry(
             kasa=kasa,
             datum=datum,
@@ -109,6 +160,7 @@ def update_entry(entry_id: int, payload: EntryCreate, db: Session = Depends(get_
         raise HTTPException(404, "Stavka ne postoji")
     if payload.ulaz < 0 or payload.izlaz < 0:
         raise HTTPException(400, "Iznosi ne smeju biti negativni")
+    ensure_unique_racun(db, payload.kasa, payload.racun_broj, entry.id)
     entry.kasa = payload.kasa
     entry.datum = payload.datum or entry.datum
     entry.opis = payload.opis
@@ -125,7 +177,7 @@ def get_journal_range_pdf(
     kasa: Kasa,
     start: date,
     end: date,
-    skip_empty: bool = True,
+    skip_empty: bool = False,
     db: Session = Depends(get_db),
 ):
     if end < start:
@@ -140,7 +192,7 @@ def get_journal_range_pdf(
         cur += timedelta(days=1)
     if not journals:
         raise HTTPException(404, "Nema stavki u datom rasponu")
-    pdf = render_journals_pdf(journals)
+    pdf = render_journal_range_pdf(journals)
     filename = f"dnevnik_{kasa.value.lower()}_{start.isoformat()}_{end.isoformat()}.pdf"
     return Response(
         content=pdf,
