@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-const API = 'http://192.168.2.43:8081'
+const API = 'http://192.168.2.123:8081'
 const KASE = ['AVANS', 'PAZAR']
 
 function todayISO() {

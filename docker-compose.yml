@@ -8,14 +8,14 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "0.0.0.0:5433:5432"
 
   backend:
     build: ./backend
     environment:
       DATABASE_URL: postgresql+psycopg2://blagajna:blagajna@db:5432/blagajna
     ports:
-      - "8081:80"
+      - "0.0.0.0:8081:80"
     volumes:
       - ./backend:/app
     depends_on:
@@ -24,7 +24,7 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "3000:5173"
+      - "0.0.0.0:3000:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules
