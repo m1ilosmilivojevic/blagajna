@@ -304,12 +304,17 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <input
-              type="date"
-              className="date-input"
-              value={datum}
-              onChange={(e) => setDatum(e.target.value)}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="date"
+                className="date-input"
+                value={datum}
+                onChange={(e) => setDatum(e.target.value)}
+              />
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {fmtDate(datum)}
+              </span>
+            </div>
             <button
               type="button"
               className="btn"
@@ -650,7 +655,7 @@ export default function App() {
             <div className="modal-sub">Kasa: {kasa}</div>
             <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
               <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
-                <span style={{ color: 'var(--text-muted)' }}>Od datuma</span>
+                <span style={{ color: 'var(--text-muted)' }}>Od datuma (DD.MM.YYYY)</span>
                 <input
                   className="date-input"
                   type="date"
@@ -658,9 +663,12 @@ export default function App() {
                   onChange={(e) => setRangeFrom(e.target.value)}
                   required
                 />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  {fmtDate(rangeFrom)}
+                </span>
               </label>
               <label style={{ display: 'grid', gap: 4, fontSize: 13 }}>
-                <span style={{ color: 'var(--text-muted)' }}>Do datuma</span>
+                <span style={{ color: 'var(--text-muted)' }}>Do datuma (DD.MM.YYYY)</span>
                 <input
                   className="date-input"
                   type="date"
@@ -668,6 +676,9 @@ export default function App() {
                   onChange={(e) => setRangeTo(e.target.value)}
                   required
                 />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  {fmtDate(rangeTo)}
+                </span>
               </label>
             </div>
             <div className="modal-actions">
@@ -697,7 +708,10 @@ export default function App() {
             onSubmit={submitUplata}
           >
             <div className="modal-title">Uplata pazara</div>
-            <div className="modal-sub">Datum: {fmtDate(datum)}</div>
+            <div className="modal-sub" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span>Datum:</span>
+              <span style={{ fontFamily: 'monospace' }}>{fmtDate(datum)}</span>
+            </div>
             <input
               className="input num"
               type="number"
